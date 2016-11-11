@@ -12,7 +12,12 @@
 
 namespace MIC_U {
 
-enum class Encoding : u8 { PCM8 = 0, PCM16 = 1, PCM8Signed = 2, PCM16Signed = 3 };
+enum class Encoding : u8 {
+    PCM8 = 0,
+    PCM16 = 1,
+    PCM8Signed = 2,
+    PCM16Signed = 3,
+};
 
 enum class SampleRate : u8 {
     SampleRate32730 = 0,

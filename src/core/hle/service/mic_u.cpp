@@ -13,31 +13,31 @@
 namespace MIC_U {
 
 enum class Encoding : u8 {
-    ENCODING_PCM8 = 0,
-    ENCODING_PCM16 = 1,
-    ENCODING_PCM8_SIGNED = 2,
-    ENCODING_PCM16_SIGNED = 3
+    PCM8 = 0,
+    PCM16 = 1,
+    PCM8Signed = 2,
+    PCM16Signed = 3
 };
 
 enum class SampleRate : u8 {
-    SAMPLE_RATE_32730 = 0,
-    SAMPLE_RATE_16360 = 1,
-    SAMPLE_RATE_10910 = 2,
-    SAMPLE_RATE_8180 = 3
+    SampleRate32730 = 0,
+    SampleRate16360 = 1,
+    SampleRate10910 = 2,
+    SampleRate8180 = 3
 };
 
 static Kernel::SharedPtr<Kernel::Event> buffer_full_event;
 static Kernel::SharedPtr<Kernel::SharedMemory> shared_memory;
-static u8 gain = 0;
-static bool power = false;
+static u8 mic_gain = 0;
+static bool mic_power = false;
 static bool is_sampling = false;
 static bool allow_shell_closed;
 static bool clamp = false;
 static Encoding encoding;
 static SampleRate sample_rate;
-static s32 offset;
-static u32 size;
-static bool loop;
+static s32 audio_buffer_offset;
+static u32 audio_buffer_size;
+static bool audio_buffer_loop;
 
 /**
  * MIC::MapSharedMem service function
@@ -56,8 +56,6 @@ static void MapSharedMem(Service::Interface* self) {
     shared_memory = Kernel::g_handle_table.Get<Kernel::SharedMemory>(mem_handle);
     if (shared_memory) {
         shared_memory->name = "MIC_U:shared_memory";
-        shared_memory->Map(Kernel::g_current_process.get(), 0, shared_memory->permissions,
-                           shared_memory->other_permissions);
     }
     cmd_buff[1] = RESULT_SUCCESS.raw; // No error
     LOG_WARNING(Service_MIC, "called, size=0x%X, mem_handle=0x%08X", size, mem_handle);
@@ -72,10 +70,6 @@ static void MapSharedMem(Service::Interface* self) {
  */
 static void UnmapSharedMem(Service::Interface* self) {
     u32* cmd_buff = Kernel::GetCommandBuffer();
-
-    if (shared_memory) {
-        shared_memory->Unmap(Kernel::g_current_process.get(), shared_memory->base_address);
-    }
 
     cmd_buff[1] = RESULT_SUCCESS.raw; // No error
     LOG_WARNING(Service_MIC, "called");
@@ -98,9 +92,9 @@ static void StartSampling(Service::Interface* self) {
 
     encoding = static_cast<Encoding>(cmd_buff[1] & 0xFF);
     sample_rate = static_cast<SampleRate>(cmd_buff[2] & 0xFF);
-    offset = cmd_buff[3];
-    size = cmd_buff[4];
-    loop = static_cast<bool>(cmd_buff[5] & 0xFF);
+    audio_buffer_offset = cmd_buff[3];
+    audio_buffer_size = cmd_buff[4];
+    audio_buffer_loop = static_cast<bool>(cmd_buff[5] & 0xFF);
 
     cmd_buff[1] = RESULT_SUCCESS.raw; // No error
     is_sampling = true;
@@ -176,9 +170,9 @@ static void GetBufferFullEvent(Service::Interface* self) {
  */
 static void SetGain(Service::Interface* self) {
     u32* cmd_buff = Kernel::GetCommandBuffer();
-    gain = cmd_buff[1] & 0xFF;
+    mic_gain = cmd_buff[1] & 0xFF;
     cmd_buff[1] = RESULT_SUCCESS.raw; // No error
-    LOG_WARNING(Service_MIC, "(STUBBED) called, gain = %d", gain);
+    LOG_WARNING(Service_MIC, "(STUBBED) called, gain = %d", mic_gain);
 }
 
 /**
@@ -192,7 +186,7 @@ static void SetGain(Service::Interface* self) {
 static void GetGain(Service::Interface* self) {
     u32* cmd_buff = Kernel::GetCommandBuffer();
     cmd_buff[1] = RESULT_SUCCESS.raw; // No error
-    cmd_buff[2] = gain;
+    cmd_buff[2] = mic_gain;
     LOG_WARNING(Service_MIC, "(STUBBED) called");
 }
 
@@ -206,9 +200,9 @@ static void GetGain(Service::Interface* self) {
  */
 static void SetPower(Service::Interface* self) {
     u32* cmd_buff = Kernel::GetCommandBuffer();
-    power = static_cast<bool>(cmd_buff[1] & 0xFF);
+    mic_power = static_cast<bool>(cmd_buff[1] & 0xFF);
     cmd_buff[1] = RESULT_SUCCESS.raw; // No error
-    LOG_WARNING(Service_MIC, "(STUBBED) called, power = %u", power);
+    LOG_WARNING(Service_MIC, "(STUBBED) called, power = %u", mic_power);
 }
 
 /**
@@ -222,7 +216,7 @@ static void SetPower(Service::Interface* self) {
 static void GetPower(Service::Interface* self) {
     u32* cmd_buff = Kernel::GetCommandBuffer();
     cmd_buff[1] = RESULT_SUCCESS.raw; // No error
-    cmd_buff[2] = power;
+    cmd_buff[2] = mic_power;
     LOG_WARNING(Service_MIC, "(STUBBED) called");
 }
 
@@ -318,8 +312,8 @@ Interface::Interface() {
     shared_memory = nullptr;
     buffer_full_event =
         Kernel::Event::Create(Kernel::ResetType::OneShot, "MIC_U::buffer_full_event");
-    gain = 0;
-    power = false;
+    mic_gain = 0;
+    mic_power = false;
     is_sampling = false;
     clamp = false;
 }
